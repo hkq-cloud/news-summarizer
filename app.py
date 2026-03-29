@@ -4,11 +4,9 @@ from bs4 import BeautifulSoup
 from transformers import pipeline
 
 app = Flask(__name__)
-
-# 启动时加载模型（只加载一次）
-print("正在加载摘要模型，请稍等...")
+print("Loading the summary model... Please wait...")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-print("模型加载完成！")
+print("model loaded")
 
 def scrape_article(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -28,7 +26,6 @@ def summarize():
 
     try:
         article_text = scrape_article(url)
-        # 模型最多处理1024个词，截断一下
         trimmed = article_text[:1024]
         result = summarizer(trimmed, max_length=150, min_length=40, do_sample=False)
         summary = result[0]['summary_text']
