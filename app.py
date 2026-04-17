@@ -6,59 +6,55 @@ import textstat
 from textblob import TextBlob
 
 app = Flask(__name__)
-<<<<<<< HEAD
 
-print("正在加载摘要模型，请稍等...")
-=======
-print("Loading the summary model... Please wait...")
->>>>>>> 3976faaa64916f83f7b0a8bae0264320496aaa7a
+print("Loading summarization model, please wait...")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-print("model loaded")
+print("Model loaded successfully!")
 
 def scrape_article(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
     response = requests.get(url, headers=headers, timeout=10)
     if response.status_code != 200:
-        raise Exception(f"无法访问网站，状态码：{response.status_code}")
+        raise Exception(f"Failed to access website, status code: {response.status_code}")
     soup = BeautifulSoup(response.text, 'html.parser')
     paragraphs = soup.find_all('p')
     text = ' '.join([p.get_text() for p in paragraphs])
     if len(text) < 100:
-        raise Exception("文章内容太短或无法提取")
+        raise Exception("Article content too short or could not be extracted")
     return text
 
-@app.route('/summarize', methods=['POST'])
-def summarize():
-    data = request.get_json()
-    url = data.get('url', '').strip()
-
-    if not url:
-        return jsonify({'error': 'No URL provided'}), 400
+def process_url(url):
+    url = url.strip()
     if not url.startswith('http'):
-        return jsonify({'error': 'Invalid URL format'}), 400
-
+        return {'url': url, 'error': 'Invalid URL format'}
     try:
         article_text = scrape_article(url)
         trimmed = article_text[:1024]
         result = summarizer(trimmed, max_length=150, min_length=40, do_sample=False)
         summary = result[0]['summary_text']
-
-        # 评估指标
-        grade_level = round(textstat.flesch_kincaid_grade(summary), 1)
-        reading_ease = round(textstat.flesch_reading_ease(summary), 1)
-        original_sentiment = round(TextBlob(trimmed).sentiment.polarity, 2)
-        summary_sentiment = round(TextBlob(summary).sentiment.polarity, 2)
-
-        return jsonify({
+        return {
             'url': url,
             'summary': summary,
-            'grade_level': grade_level,
-            'reading_ease': reading_ease,
-            'original_sentiment': original_sentiment,
-            'summary_sentiment': summary_sentiment
-        })
+            'grade_level': round(textstat.flesch_kincaid_grade(summary), 1),
+            'reading_ease': round(textstat.flesch_reading_ease(summary), 1),
+            'original_sentiment': round(TextBlob(trimmed).sentiment.polarity, 2),
+            'summary_sentiment': round(TextBlob(summary).sentiment.polarity, 2)
+        }
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return {'url': url, 'error': str(e)}
+
+@app.route('/summarize', methods=['POST'])
+def summarize():
+    data = request.get_json()
+
+    if 'urls' in data:
+        urls = data['urls']
+        results = [process_url(url) for url in urls]
+        return jsonify({'results': results})
+    elif 'url' in data:
+        return jsonify(process_url(data['url']))
+    else:
+        return jsonify({'error': 'No URL provided'}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
