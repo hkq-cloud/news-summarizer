@@ -6,10 +6,14 @@ import textstat
 from textblob import TextBlob
 
 app = Flask(__name__)
+<<<<<<< HEAD
 
 print("正在加载摘要模型，请稍等...")
+=======
+print("Loading the summary model... Please wait...")
+>>>>>>> 3976faaa64916f83f7b0a8bae0264320496aaa7a
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-print("模型加载完成！")
+print("model loaded")
 
 def scrape_article(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
