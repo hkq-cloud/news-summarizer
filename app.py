@@ -4,12 +4,18 @@ from bs4 import BeautifulSoup
 from transformers import pipeline
 import textstat
 from textblob import TextBlob
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 app = Flask(__name__)
 
 print("Loading summarization model, please wait...")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 print("Model loaded successfully!")
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def scrape_article(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -23,6 +29,25 @@ def scrape_article(url):
         raise Exception("Article content too short or could not be extracted")
     return text
 
+def get_openai_summary(text):
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a news summarizer. Summarize the article in 2-3 sentences."},
+            {"role": "user", "content": text[:3000]}
+        ]
+    )
+    return response.choices[0].message.content
+
+def evaluate(text, summary):
+    return {
+        'summary': summary,
+        'grade_level': round(textstat.flesch_kincaid_grade(summary), 1),
+        'reading_ease': round(textstat.flesch_reading_ease(summary), 1),
+        'original_sentiment': round(TextBlob(text).sentiment.polarity, 2),
+        'summary_sentiment': round(TextBlob(summary).sentiment.polarity, 2)
+    }
+
 def process_url(url):
     url = url.strip()
     if not url.startswith('http'):
@@ -30,15 +55,18 @@ def process_url(url):
     try:
         article_text = scrape_article(url)
         trimmed = article_text[:1024]
-        result = summarizer(trimmed, max_length=150, min_length=40, do_sample=False)
-        summary = result[0]['summary_text']
+
+        # BART summary
+        bart_result = summarizer(trimmed, max_length=150, min_length=40, do_sample=False)
+        bart_summary = bart_result[0]['summary_text']
+
+        # GPT summary
+        gpt_summary = get_openai_summary(article_text)
+
         return {
             'url': url,
-            'summary': summary,
-            'grade_level': round(textstat.flesch_kincaid_grade(summary), 1),
-            'reading_ease': round(textstat.flesch_reading_ease(summary), 1),
-            'original_sentiment': round(TextBlob(trimmed).sentiment.polarity, 2),
-            'summary_sentiment': round(TextBlob(summary).sentiment.polarity, 2)
+            'bart': evaluate(trimmed, bart_summary),
+            'gpt': evaluate(trimmed, gpt_summary)
         }
     except Exception as e:
         return {'url': url, 'error': str(e)}
@@ -46,10 +74,8 @@ def process_url(url):
 @app.route('/summarize', methods=['POST'])
 def summarize():
     data = request.get_json()
-
     if 'urls' in data:
-        urls = data['urls']
-        results = [process_url(url) for url in urls]
+        results = [process_url(url) for url in data['urls']]
         return jsonify({'results': results})
     elif 'url' in data:
         return jsonify(process_url(data['url']))
