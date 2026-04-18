@@ -1,15 +1,17 @@
 from flask import Flask, request, jsonify
-import requests
+from flask_cors import CORS
 from bs4 import BeautifulSoup
 from transformers import pipeline
 import textstat
 from textblob import TextBlob
 from openai import OpenAI
 from dotenv import load_dotenv
+import requests
 import os
 
 load_dotenv()
 app = Flask(__name__)
+CORS(app)
 
 print("Loading summarization model, please wait...")
 summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
@@ -55,14 +57,9 @@ def process_url(url):
     try:
         article_text = scrape_article(url)
         trimmed = article_text[:1024]
-
-        # BART summary
         bart_result = summarizer(trimmed, max_length=150, min_length=40, do_sample=False)
         bart_summary = bart_result[0]['summary_text']
-
-        # GPT summary
         gpt_summary = get_openai_summary(article_text)
-
         return {
             'url': url,
             'bart': evaluate(trimmed, bart_summary),
