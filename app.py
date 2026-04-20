@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from bs4 import BeautifulSoup
 from transformers import pipeline
@@ -26,6 +26,10 @@ PRESET_SETTINGS = {
     "professional": {"max_length": 130, "min_length": 40, "level": "college"},
     "detailed":     {"max_length": 200, "min_length": 80, "level": "high school"},
 }
+
+@app.route('/')
+def index():
+    return send_from_directory('.', 'index.html')
 
 def scrape_article(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
