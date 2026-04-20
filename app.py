@@ -21,17 +21,10 @@ print("Model loaded successfully!")
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-LENGTH_SETTINGS = {
-    "short":  {"max_length": 60,  "min_length": 20},
-    "medium": {"max_length": 130, "min_length": 40},
-    "long":   {"max_length": 200, "min_length": 80},
-}
-
-LEVEL_SETTINGS = {
-    "elementary": "elementary school (simple words, short sentences)",
-    "high school": "high school level",
-    "college": "college level",
-    "expert": "expert level with technical language",
+PRESET_SETTINGS = {
+    "general":      {"max_length": 60,  "min_length": 20, "level": "elementary"},
+    "professional": {"max_length": 130, "min_length": 40, "level": "college"},
+    "detailed":     {"max_length": 200, "min_length": 80, "level": "high school"},
 }
 
 def scrape_article(url):
@@ -46,8 +39,14 @@ def scrape_article(url):
         raise Exception("Article content too short or could not be extracted")
     return text
 
-def get_openai_summary(text, level="high school"):
-    level_desc = LEVEL_SETTINGS.get(level, LEVEL_SETTINGS["high school"])
+def get_openai_summary(text, level):
+    level_descriptions = {
+        "elementary": "elementary school (simple words, short sentences)",
+        "high school": "high school level",
+        "college": "college level",
+        "expert": "expert level with technical language",
+    }
+    level_desc = level_descriptions.get(level, "high school level")
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -87,7 +86,7 @@ def evaluate(original, summary):
         'compression_ratio': compression,
     }
 
-def process_url(url, length="medium", level="high school"):
+def process_url(url, preset="general"):
     url = url.strip()
     if not url.startswith('http'):
         return {'url': url, 'error': 'Invalid URL format'}
@@ -95,16 +94,18 @@ def process_url(url, length="medium", level="high school"):
         article_text = scrape_article(url)
         trimmed = article_text[:1024]
 
-        length_params = LENGTH_SETTINGS.get(length, LENGTH_SETTINGS["medium"])
-        bart_result = summarizer(trimmed, do_sample=False, **length_params)
+        settings = PRESET_SETTINGS.get(preset, PRESET_SETTINGS["general"])
+        bart_result = summarizer(trimmed, do_sample=False,
+            max_length=settings["max_length"],
+            min_length=settings["min_length"])
         bart_summary = bart_result[0]['summary_text']
 
-        gpt_summary = get_openai_summary(article_text, level)
-
+        gpt_summary = get_openai_summary(article_text, settings["level"])
         keywords = get_keywords(trimmed)
 
         return {
             'url': url,
+            'preset': preset,
             'keywords': keywords,
             'bart': evaluate(trimmed, bart_summary),
             'gpt': evaluate(trimmed, gpt_summary)
@@ -115,14 +116,13 @@ def process_url(url, length="medium", level="high school"):
 @app.route('/summarize', methods=['POST'])
 def summarize():
     data = request.get_json()
-    length = data.get('length', 'medium')
-    level = data.get('level', 'high school')
+    preset = data.get('preset', 'general')
 
     if 'urls' in data:
-        results = [process_url(url, length, level) for url in data['urls']]
+        results = [process_url(url, preset) for url in data['urls']]
         return jsonify({'results': results})
     elif 'url' in data:
-        return jsonify(process_url(data['url'], length, level))
+        return jsonify(process_url(data['url'], preset))
     else:
         return jsonify({'error': 'No URL provided'}), 400
 

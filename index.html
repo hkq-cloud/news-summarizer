@@ -357,7 +357,7 @@
             <span class="theme-toggle-label" id="themeLabel">Dark</span>
         </button>
         <hr class="masthead-rule" />
-        <h1>The News Summarizer</h1>
+        <h1>The Daily Brief</h1>
         <p class="masthead-sub">AI-Powered Article Digests</p>
         <p class="masthead-date" id="todayDate"></p>
         <hr class="masthead-rule-bottom" />
@@ -376,20 +376,11 @@
             <div class="validation-msg" id="validationMsg"></div>
             <div class="options-row">
                 <div class="option-group">
-                    <span class="option-label">Summary Length</span>
-                    <select class="option-select" id="lengthSelect">
-                        <option value="short">Short</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="long">Long</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <span class="option-label">Reading Level (GPT)</span>
-                    <select class="option-select" id="levelSelect">
-                        <option value="elementary">Elementary</option>
-                        <option value="high school" selected>High School</option>
-                        <option value="college">College</option>
-                        <option value="expert">Expert</option>
+                    <span class="option-label">Summary Style</span>
+                    <select class="option-select" id="presetSelect">
+                        <option value="general">General Reader — Short &amp; Simple</option>
+                        <option value="professional">Professional — Medium &amp; College Level</option>
+                        <option value="detailed">Detailed Report — Long &amp; Comprehensive</option>
                     </select>
                 </div>
             </div>
@@ -714,6 +705,8 @@
             const gptWins = data.gpt.reading_ease > data.bart.reading_ease;
 
             // Keywords
+            const existingKw = document.querySelector('.keywords-row');
+            if (existingKw) existingKw.remove();
             if (data.keywords && data.keywords.length) {
                 const kw = data.keywords.map(k => `<span class="keyword-pill">${k}</span>`).join('');
                 document.getElementById('resultsTimestamp').insertAdjacentHTML('afterend', `<div class="keywords-row" style="margin-top:10px">${kw}</div>`);
@@ -795,8 +788,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         url,
-                        length: document.getElementById('lengthSelect').value,
-                        level: document.getElementById('levelSelect').value
+                        preset: document.getElementById('presetSelect').value
                     })
                 });
                 const data = await res.json();
