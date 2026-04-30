@@ -15,9 +15,14 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-print("Loading summarization model, please wait...")
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-print("Model loaded successfully!")
+print("Loading models, please wait...")
+bart_summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+print("BART loaded!")
+pegasus_summarizer = pipeline("summarization", model="google/pegasus-xsum")
+print("PEGASUS loaded!")
+t5_summarizer = pipeline("summarization", model="t5-small")
+print("T5 loaded!")
+print("All models loaded successfully!")
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -97,14 +102,36 @@ def process_url(url, preset="general"):
     try:
         article_text = scrape_article(url)
         trimmed = article_text[:1024]
-
         settings = PRESET_SETTINGS.get(preset, PRESET_SETTINGS["general"])
-        bart_result = summarizer(trimmed, do_sample=False,
+
+        # BART
+        bart_result = bart_summarizer(trimmed, do_sample=False,
             max_length=settings["max_length"],
             min_length=settings["min_length"])
         bart_summary = bart_result[0]['summary_text']
 
+        # GPT-3.5
         gpt_summary = get_openai_summary(article_text, settings["level"])
+
+        # PEGASUS
+        try:
+            pegasus_result = pegasus_summarizer(trimmed, do_sample=False,
+                max_length=settings["max_length"],
+                min_length=settings["min_length"])
+            pegasus_summary = pegasus_result[0]['summary_text']
+        except Exception as e:
+            pegasus_summary = f"PEGASUS error: {str(e)}"
+
+        # T5
+        try:
+            t5_input = "summarize: " + trimmed
+            t5_result = t5_summarizer(t5_input, do_sample=False,
+                max_length=settings["max_length"],
+                min_length=settings["min_length"])
+            t5_summary = t5_result[0]['summary_text']
+        except Exception as e:
+            t5_summary = f"T5 error: {str(e)}"
+
         keywords = get_keywords(trimmed)
 
         return {
@@ -112,7 +139,9 @@ def process_url(url, preset="general"):
             'preset': preset,
             'keywords': keywords,
             'bart': evaluate(trimmed, bart_summary),
-            'gpt': evaluate(trimmed, gpt_summary)
+            'gpt': evaluate(trimmed, gpt_summary),
+            'pegasus': evaluate(trimmed, pegasus_summary),
+            't5': evaluate(trimmed, t5_summary),
         }
     except Exception as e:
         return {'url': url, 'error': str(e)}
