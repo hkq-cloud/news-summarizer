@@ -244,6 +244,8 @@
         .card-badge { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase; padding: 3px 12px; border-radius: 2px; display: inline-block; }
         .card-badge.bart { background: var(--ink); color: var(--paper); }
         .card-badge.gpt { background: var(--accent); color: white; }
+        .card-badge.pegasus { background: #2563eb; color: white; }
+        .card-badge.t5 { background: #16a34a; color: white; }
         .winner-tag { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--green); display: flex; align-items: center; gap: 4px; }
 
         .card-actions { display: flex; gap: 6px; margin-top: 2px; }
@@ -300,6 +302,8 @@
         .comp-winner { font-size: 10px; padding: 2px 8px; border-radius: 2px; font-weight: 500; }
         .comp-winner.bart { background: var(--ink); color: var(--paper); }
         .comp-winner.gpt { background: var(--accent); color: white; }
+        .comp-winner.pegasus { background: #2563eb; color: white; }
+        .comp-winner.t5 { background: #16a34a; color: white; }
         .comp-winner.tie { background: var(--rule); color: var(--text); }
 
         /* ===== HISTORY ===== */
@@ -586,7 +590,8 @@
            BUILD CARD
            ============================================================ */
         function buildCard(type, data, isWinner) {
-            const isGpt = type === 'gpt';
+            const labels = { bart: 'BART', gpt: 'GPT-3.5', pegasus: 'PEGASUS', t5: 'T5' };
+            const label = labels[type] || type.toUpperCase();
             const label = isGpt ? 'GPT-3.5' : 'BART';
             const words = data.summary.split(' ').length;
             const needsCollapse = words > 50;
@@ -600,7 +605,7 @@
             return `
                 <div class="summary-card ${isWinner ? 'winner' : ''}">
                     <div class="card-top-row">
-                        <span class="card-badge ${isGpt ? 'gpt' : 'bart'}">${label}</span>
+                        <span class="card-badge ${type}">${label}</span>
                         <div style="display:flex;align-items:center;gap:10px">
                             ${isWinner ? '<span class="winner-tag">&#10003; More readable</span>' : ''}
                             <div class="card-actions">
@@ -712,7 +717,11 @@
                 document.getElementById('resultsTimestamp').insertAdjacentHTML('afterend', `<div class="keywords-row" style="margin-top:10px">${kw}</div>`);
             }
 
-            grid.innerHTML = buildCard('bart', data.bart, bartWins) + buildCard('gpt', data.gpt, gptWins);
+            // Show all 4 models
+            const models = ['bart', 'gpt', 'pegasus', 't5'];
+            const available = models.filter(m => data[m]);
+            const bestEase = Math.max(...available.map(m => data[m].reading_ease));
+            grid.innerHTML = available.map(m => buildCard(m, data[m], data[m].reading_ease === bestEase)).join('');
             bar.innerHTML = buildComparisonBar(data.bart, data.gpt);
 
             const link = document.getElementById('articleLink');
