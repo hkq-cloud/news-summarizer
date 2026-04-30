@@ -592,7 +592,6 @@
         function buildCard(type, data, isWinner) {
             const labels = { bart: 'BART', gpt: 'GPT-3.5', pegasus: 'PEGASUS', t5: 'T5' };
             const label = labels[type] || type.toUpperCase();
-            const label = isGpt ? 'GPT-3.5' : 'BART';
             const words = data.summary.split(' ').length;
             const needsCollapse = words > 50;
             const gc = gradeLevelColor(data.grade_level);
