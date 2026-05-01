@@ -32,6 +32,13 @@ PRESET_SETTINGS = {
     "detailed":     {"max_length": 200, "min_length": 80, "level": "high school"},
 }
 
+PROMPT_VARIANTS = {
+    "v1_baseline": "Summarize this news article in 2-3 sentences.",
+    "v2_audience": "Summarize this article in 2-3 sentences at a {level} reading level.",
+    "v3_cot": "First identify the 3 most important facts in this article. Then write a 2-3 sentence summary that captures those facts.",
+    "v4_constraint": "Summarize this article in exactly 2 sentences. Use simple, clear language. Avoid jargon.",
+}
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -48,7 +55,7 @@ def scrape_article(url):
         raise Exception("Article content too short or could not be extracted")
     return text
 
-def get_openai_summary(text, level):
+def get_openai_summary(text, level, prompt_variant="v2_audience"):
     level_descriptions = {
         "elementary": "elementary school (simple words, short sentences)",
         "high school": "high school level",
@@ -56,10 +63,14 @@ def get_openai_summary(text, level):
         "expert": "expert level with technical language",
     }
     level_desc = level_descriptions.get(level, "high school level")
+    
+    prompt_template = PROMPT_VARIANTS.get(prompt_variant, PROMPT_VARIANTS["v2_audience"])
+    system_prompt = prompt_template.format(level=level_desc)
+    
     response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": f"You are a news summarizer. Summarize the article in 2-3 sentences at a {level_desc} reading level."},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": text[:3000]}
         ]
     )
@@ -95,7 +106,7 @@ def evaluate(original, summary):
         'compression_ratio': compression,
     }
 
-def process_url(url, preset="general"):
+def process_url(url, preset="general", prompt_variant="v2_audience"):
     url = url.strip()
     if not url.startswith('http'):
         return {'url': url, 'error': 'Invalid URL format'}
@@ -110,8 +121,8 @@ def process_url(url, preset="general"):
             min_length=settings["min_length"])
         bart_summary = bart_result[0]['summary_text']
 
-        # GPT-3.5
-        gpt_summary = get_openai_summary(article_text, settings["level"])
+        # GPT with selected prompt variant
+        gpt_summary = get_openai_summary(article_text, settings["level"], prompt_variant)
 
         # PEGASUS
         try:
@@ -137,6 +148,7 @@ def process_url(url, preset="general"):
         return {
             'url': url,
             'preset': preset,
+            'prompt_variant': prompt_variant,
             'keywords': keywords,
             'bart': evaluate(trimmed, bart_summary),
             'gpt': evaluate(trimmed, gpt_summary),
@@ -150,14 +162,19 @@ def process_url(url, preset="general"):
 def summarize():
     data = request.get_json()
     preset = data.get('preset', 'general')
+    prompt_variant = data.get('prompt_variant', 'v2_audience')
 
     if 'urls' in data:
-        results = [process_url(url, preset) for url in data['urls']]
+        results = [process_url(url, preset, prompt_variant) for url in data['urls']]
         return jsonify({'results': results})
     elif 'url' in data:
-        return jsonify(process_url(data['url'], preset))
+        return jsonify(process_url(data['url'], preset, prompt_variant))
     else:
         return jsonify({'error': 'No URL provided'}), 400
+
+@app.route('/prompts', methods=['GET'])
+def get_prompts():
+    return jsonify(PROMPT_VARIANTS)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
